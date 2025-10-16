@@ -23,8 +23,56 @@ PAD_NOTES = list(range(36, 52)) # MIDI Notes 36 (C1) to 51 (D#2)
 # We only use velocities > 0 for random colors.
 COLOR_VELOCITIES = [5, 13, 21, 56, 60, 64, 80, 127] # Red, Orange, Yellow, Green, Cyan, Blue, Purple, White
 
+def save_midi_port_name(port_name):
+    """Saves the detected MIDI port name to config.json."""
+    config = {"MIDI_PORT_NAME": port_name}
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
+        print(f"SUCCESS: Configuration saved automatically to {CONFIG_FILE}.")
+    except Exception as e:
+        print(f"CRITICAL ERROR: Could not write {CONFIG_FILE}. Please check file permissions. Error: {e}")
+
+def auto_detect_and_save_port():
+    """Scans ports, guesses the Launchkey port, and saves the config automatically."""
+    print("Attempting automatic MIDI port detection...")
+    
+    try:
+        output_names = mido.get_output_names()
+    except Exception as e:
+        print(f"Error accessing MIDI ports: {e}")
+        return DEFAULT_PORT
+    
+    detected_port = None
+    
+    for name in output_names:
+        lower_name = name.lower()
+        # Look for 'launchkey' AND ('midi 2' OR 'incontrol')
+        if 'launchkey' in lower_name and ('midi 2' in lower_name or 'incontrol' in lower_name):
+            detected_port = name
+            break
+            
+    if detected_port:
+        print(f"Auto-Detected Port: '{detected_port}'. Saving configuration...")
+        save_midi_port_name(detected_port)
+        return detected_port
+    else:
+        # Fallback if the specific port name isn't found
+        print("\n--- WARNING: Launchkey LED Control Port Not Found Automatically ---")
+        print(f"Using default port: '{DEFAULT_PORT}'")
+        print("Available MIDI Output Ports:")
+        if not output_names:
+            print("  No MIDI output ports detected. Is the Launchkey connected and drivers installed?")
+        else:
+            for i, name in enumerate(output_names):
+                print(f"  [{i+1}] {name}")
+            
+        print("If the default fails, please use the 'launchkey_controller.html' GUI to find and set the correct port name manually.")
+        return DEFAULT_PORT
+
+
 def load_midi_port_name():
-    """Reads the MIDI port name from config.json or returns the default."""
+    """Reads the MIDI port name from config.json or attempts auto-detection."""
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r') as f:
@@ -33,11 +81,11 @@ def load_midi_port_name():
                 print(f"Configuration loaded from {CONFIG_FILE}: Port '{port_name}'")
                 return port_name
         except Exception as e:
-            print(f"Warning: Failed to read or parse {CONFIG_FILE}. Using default port '{DEFAULT_PORT}'. Error: {e}")
-            return DEFAULT_PORT
+            print(f"Warning: Failed to read or parse {CONFIG_FILE}. Attempting auto-detection.")
+            return auto_detect_and_save_port()
     else:
-        print(f"Warning: Configuration file {CONFIG_FILE} not found. Using default port '{DEFAULT_PORT}'.")
-        return DEFAULT_PORT
+        # If config file is missing, try to auto-detect and save it
+        return auto_detect_and_save_port()
 
 def send_led_message(port, note, velocity):
     """Sends a MIDI Note On message (color setting) to the Launchkey pad."""
@@ -100,7 +148,7 @@ if __name__ == "__main__":
 
     except ValueError:
         print(f"Error: Could not find or open the MIDI port named '{MIDI_PORT_NAME}'.")
-        print("Please use the 'launchkey_controller.html' GUI to find and set the correct port name in 'config.json'.")
+        print("The configured port failed to open. Please check the name in 'config.json' or delete it to force auto-detection.")
     except Exception as e:
         print(f"An unexpected error occurred during setup: {e}")
     finally:
