@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novation Launchkey MK2 RGB Controller</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050a0f; /* Even darker background */
+            color: #e5e7eb;
+        }
+        
+        /* Base for control buttons */
+        .midi-button {
+            @apply font-bold py-3 px-4 rounded-xl transition duration-200 shadow-xl active:scale-98;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Pattern Button specific styling (Gradients and Glow) */
+        .pattern-button-rainbow {
+            background-image: linear-gradient(135deg, #4f46e5 0%, #a78bfa 100%);
+            box-shadow: 0 8px 15px rgba(79, 70, 229, 0.4);
+        }
+        .pattern-button-wave {
+            background-image: linear-gradient(135deg, #9333ea 0%, #c084fc 100%);
+            box-shadow: 0 8px 15px rgba(147, 51, 234, 0.4);
+        }
+        .pattern-button-rain {
+            background-image: linear-gradient(135deg, #0d9488 0%, #5eead4 100%);
+            box-shadow: 0 8px 15px rgba(13, 148, 136, 0.4);
+        }
+        .pattern-button-stop {
+            background-color: #dc2626;
+            box-shadow: 0 4px 10px rgba(220, 38, 38, 0.5);
+        }
+        .midi-button:hover {
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.6);
+            transform: translateY(-2px);
+        }
+        .midi-button.active-pattern {
+            box-shadow: 0 0 20px 5px #f97316, inset 0 0 10px #f97316; /* Active Glow */
+            transform: scale(1.02);
+            border: 2px solid #f97316;
+        }
+
+
+        /* Pad visualization styling (3D Effect) */
+        .pad {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.1s ease-in-out;
+            border: 2px solid #1f2937; /* Dark border */
+            text-align: center;
+            line-height: 46px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.3);
+            /* Default appearance (off state) */
+            background-color: #111827;
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.5), 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+        .pad:hover {
+            transform: scale(1.05);
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.8);
+        }
+        
+        /* Dynamic Pad Lighting controlled by JS */
+        .lit-pad {
+            /* This class will be applied by JS, overriding the background-color and box-shadow */
+            /* The transition in JS will make the color change smooth */
+        }
+
+        /* Color Picker Styling */
+        .color-option {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            border: 2px solid transparent;
+        }
+        .color-option.selected {
+            border: 3px solid #f97316; 
+            transform: scale(1.3);
+            box-shadow: 0 0 10px 3px #f97316;
+        }
+    </style>
+</head>
+<body>
+
+<div class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-700">
+        <h1 class="text-4xl font-extrabold text-white mb-6 pb-3 text-center tracking-wider">
+            Novation Launchkey MK2 RGB Controller
+        </h1>
+        <p class="text-gray-400 mb-6 text-center">Customize the ambient lighting for your controller's drum pads.</p>
+
+        <!-- Connection and Status -->
+        <div id="connection-status" class="mb-6 p-4 rounded-xl bg-red-900/50 text-red-300 border border-red-700">
+            <p id="status-text">Status: Not connected to MIDI. Requesting access...</p>
+        </div>
+        
+        <!-- Persistence Warning -->
+        <div id="persistence-info" class="mb-6 p-3 rounded-xl bg-blue-900/50 text-blue-300 border border-blue-700 text-sm hidden">
+            <p>✅ **Browser Persistence Active!** Your manual settings (port and pattern) were restored. The pattern will automatically resume when the app is opened. (Pattern is only active while the browser is open.)</p>
+        </div>
+
+
+        <div class="flex flex-col md:flex-row gap-8">
+            
+            <!-- Pattern Control Panel -->
+            <div class="md:w-1/2 bg-gray-900 p-6 rounded-xl border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Automatic Pattern Control</h2>
+                <p class="text-gray-400 mb-4">Select one of the light patterns for the pad LEDs.</p>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <button onclick="startPattern('rainbow')" class="midi-button pattern-button-rainbow">
+                        <span class="text-lg">🌈</span> Rainbow Cycle
+                    </button>
+                    <button onclick="startPattern('wave')" class="midi-button pattern-button-wave">
+                        <span class="text-lg">🌊</span> Wave (Knight Rider)
+                    </button>
+                    <button onclick="startPattern('rain')" class="midi-button pattern-button-rain">
+                        <span class="text-lg">🌧️</span> Random ARGB Rain
+                    </button>
+                </div>
+
+                <button onclick="stopPattern()" class="midi-button pattern-button-stop w-full">
+                    <span class="text-lg">❌</span> Stop Patterns & Clear Pads
+                </button>
+                
+                <hr class="my-6 border-gray-700">
+
+                <!-- MIDI Port Selection and Configuration Generator -->
+                <h2 class="text-xl font-semibold mb-3 text-white">1. Select MIDI Output Port</h2>
+                <select id="midi-out-select" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white mb-4 shadow-inner shadow-gray-900" onchange="selectMidiPort()">
+                    <option value="">Searching...</option>
+                </select>
+                <button onclick="requestMidiAccess()" id="connect-button" class="midi-button bg-green-600 hover:bg-green-700 text-white w-full disabled:opacity-50">
+                    Retry Connection
+                </button>
+
+                <hr class="my-6 border-gray-700">
+                
+                <!-- Configuration Generation Section -->
+                <h2 class="text-xl font-semibold mb-3 text-white">2. For Background EXE/PY Execution</h2>
+                <p class="text-sm text-gray-400 mb-3">Copy the code below, create a file named **config.json** in the same folder as the Python script/EXE, and paste this content inside.</p>
+                <div id="config-output" class="p-3 bg-gray-700 rounded-lg text-yellow-300 text-sm font-mono overflow-auto whitespace-pre-wrap">
+                    { "MIDI_PORT_NAME": "[Select port above to generate config]" }
+                </div>
+                <button onclick="copyConfigToClipboard()" id="copy-config-btn" class="midi-button bg-indigo-600 hover:bg-indigo-700 text-white w-full mt-3 disabled:opacity-50" disabled>
+                    Copy Config Content
+                </button>
+            </div>
+
+            <!-- Manual Pad Control -->
+            <div class="md:w-1/2 bg-gray-900 p-6 rounded-xl border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4 text-white border-b border-gray-700 pb-2">Manual Pad Control</h2>
+                <p class="text-gray-400 mb-4">Select a color, then click the desired pad below to change its light.</p>
+                
+                <!-- Color Selector -->
+                <div id="color-selector" class="flex flex-wrap gap-4 justify-center mb-6 p-4 bg-gray-700 rounded-xl shadow-inner shadow-gray-800">
+                    <!-- Color options will be injected here -->
+                </div>
+
+                <!-- Pad Grid Visualization (4x4) -->
+                <div id="pad-grid" class="grid grid-cols-4 gap-4 p-6 bg-gray-700 rounded-xl justify-items-center shadow-2xl">
+                    <!-- Pads will be injected here -->
+                </div>
+                <p class="text-xs text-center text-gray-500 mt-2">Note: Pad numbering is from bottom-left to top-right (like the Launchkey).</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Constants for Launchkey MK2 Pads
+    const PAD_NOTES = Array.from({ length: 16 }, (_, i) => 36 + i); // MIDI Notes 36 (C1) to 51 (D#2)
+    const MIDI_CHANNEL = 0; // MIDI Channel 1 (index 0)
+    
+    // Novation Launchkey MK2 Color Palette (Velocity values)
+    const COLORS_MAP = [
+        // English names for console/debug only
+        { name: 'Off', hex: '#111827', velocity: 0, css: 'bg-gray-900', glow: 'none' },
+        { name: 'Red', hex: '#ff0000', velocity: 5, css: 'bg-red-600', glow: '0 0 10px 2px #ff0000, inset 0 0 5px #ff0000' },
+        { name: 'Orange', hex: '#ffa500', velocity: 13, css: 'bg-orange-500', glow: '0 0 10px 2px #ffa500, inset 0 0 5px #ffa500' },
+        { name: 'Yellow', hex: '#ffff00', velocity: 21, css: 'bg-yellow-400', glow: '0 0 10px 2px #ffff00, inset 0 0 5px #ffff00' },
+        { name: 'Green', hex: '#00ff00', velocity: 56, css: 'bg-green-600', glow: '0 0 10px 2px #00ff00, inset 0 0 5px #00ff00' },
+        { name: 'Cyan', hex: '#00ffff', velocity: 60, css: 'bg-cyan-400', glow: '0 0 10px 2px #00ffff, inset 0 0 5px #00ffff' },
+        { name: 'Blue', hex: '#0000ff', velocity: 64, css: 'bg-blue-600', glow: '0 0 10px 2px #0000ff, inset 0 0 5px #0000ff' },
+        { name: 'Purple', hex: '#800080', velocity: 80, css: 'bg-purple-600', glow: '0 0 10px 2px #800080, inset 0 0 5px #800080' },
+        { name: 'White', hex: '#ffffff', velocity: 127, css: 'bg-white', glow: '0 0 10px 2px #ffffff, inset 0 0 5px #ffffff' }
+    ];
+
+    let midiAccess = null;
+    let midiOutputPort = null;
+    let selectedColor = COLORS_MAP[1]; // Default to Red
+    let patternInterval = null;
+    let patternActive = false;
+    
+    // DOM Elements
+    const statusText = document.getElementById('status-text');
+    const connectButton = document.getElementById('connect-button');
+    const midiOutSelect = document.getElementById('midi-out-select');
+    const colorSelectorDiv = document.getElementById('color-selector');
+    const padGridDiv = document.getElementById('pad-grid');
+    const persistenceInfo = document.getElementById('persistence-info');
+    const configOutputDiv = document.getElementById('config-output');
+    const copyConfigBtn = document.getElementById('copy-config-btn');
+
+    // --- PERSISTENCE (Browser) FUNCTIONS ---
+    const STORAGE_KEY = 'launchkey_mk2_state';
+
+    /**
+     * Saves the current active state (port ID and pattern name) to localStorage.
+     * @param {string | null} activePattern The name of the active pattern ('rainbow', 'wave', 'rain', 'manual', or 'none').
+     */
+    function saveState(activePattern = null) {
+        try {
+            const state = {
+                portId: midiOutputPort ? midiOutputPort.id : null,
+                patternName: activePattern
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            // Show persistence info if a port is connected
+            if (midiOutputPort) {
+                persistenceInfo.classList.remove('hidden');
+            }
+        } catch (e) {
+            console.error("Could not save state to localStorage:", e);
+        }
+    }
+
+    /**
+     * Loads the saved state from localStorage and attempts to resume the pattern.
+     * @param {Array} ports Array of available MIDI output ports.
+     */
+    function loadAndResumeState(ports) {
+        try {
+            const storedState = localStorage.getItem(STORAGE_KEY);
+            if (storedState) {
+                const state = JSON.parse(storedState);
+                
+                // 1. Restore Port Selection
+                if (state.portId) {
+                    const port = ports.find(p => p.id === state.portId);
+                    if (port) {
+                        midiOutSelect.value = state.portId;
+                        selectMidiPort(true); // Select port silently
+
+                        // 2. Restore Pattern
+                        if (state.patternName && state.patternName !== 'none' && state.patternName !== 'manual') {
+                            // Delay start slightly to ensure MIDI port is fully ready
+                            setTimeout(() => {
+                                startPattern(state.patternName, true); // Start pattern silently
+                                statusText.textContent += ` (Pattern '${state.patternName}' restored)`;
+                                persistenceInfo.classList.remove('hidden');
+                            }, 500); 
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Could not load state from localStorage:", e);
+        }
+    }
+
+    // --- MIDI CORE FUNCTIONS ---
+
+    /**
+     * Sends a MIDI Note On message to control a single Launchkey pad LED.
+     * @param {number} note MIDI note number (36-51)
+     * @param {number} velocity MIDI velocity (0-127, corresponds to color)
+     */
+    function sendMidiMessage(note, velocity) {
+        if (!midiOutputPort) {
+            console.error("MIDI output port is not selected or available.");
+            return;
+        }
+        
+        // MIDI Note On status byte is 0x90 (144) for channel 1 (index 0)
+        const noteOn = 0x90 + MIDI_CHANNEL;
+        const message = [noteOn, note, velocity];
+        
+        try {
+            midiOutputPort.send(message);
+        } catch (e) {
+            console.error("Failed to send MIDI message:", e);
+        }
+    }
+
+    /**
+     * Tries to get access to the Web MIDI API.
+     */
+    async function requestMidiAccess() {
+        if (!navigator.requestMIDIAccess) {
+            statusText.textContent = "Error: Your browser does not support the Web MIDI API.";
+            return;
+        }
+        
+        connectButton.disabled = true;
+        statusText.parentElement.classList.remove('bg-green-900/50', 'bg-red-900/50', 'border-green-700', 'border-red-700');
+        statusText.parentElement.classList.add('bg-yellow-900/50', 'border-yellow-700');
+        statusText.textContent = "Status: Requesting MIDI access...";
+
+        try {
+            midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+            const availablePorts = populateMidiPorts();
+            midiAccess.onstatechange = populateMidiPorts;
+            
+            statusText.parentElement.classList.remove('bg-yellow-900/50', 'border-yellow-700');
+            statusText.parentElement.classList.add('bg-green-900/50', 'border-green-700');
+            statusText.textContent = "Status: MIDI access successful. Select the Launchkey port.";
+            connectButton.disabled = false;
+            
+            // Attempt to load and resume state immediately after getting access
+            loadAndResumeState(availablePorts);
+
+        } catch (e) {
+            statusText.parentElement.classList.remove('bg-yellow-900/50', 'border-yellow-700');
+            statusText.parentElement.classList.add('bg-red-900/50', 'border-red-700');
+            statusText.textContent = `Error: MIDI access denied or device not found. (${e.message})`;
+            connectButton.disabled = false;
+        }
+    }
+
+    /**
+     * Populates the dropdown with available MIDI output ports.
+     * @returns {Array} List of available ports.
+     */
+    function populateMidiPorts() {
+        if (!midiAccess) return [];
+        
+        midiOutSelect.innerHTML = '';
+        let optionsFound = false;
+        let launchkeyPortId = null;
+        const availablePorts = [];
+
+        const ports = midiAccess.outputs.values();
+        for (let port of ports) {
+            availablePorts.push(port);
+            const option = document.createElement('option');
+            option.value = port.id;
+            option.textContent = port.name;
+            midiOutSelect.appendChild(option);
+            optionsFound = true;
+
+            // Attempt to auto-select the Launchkey InControl port
+            if (port.name.toLowerCase().includes('launchkey') && 
+                (port.name.toLowerCase().includes('midi 2') || port.name.toLowerCase().includes('incontrol'))) {
+                launchkeyPortId = port.id;
+            }
+        }
+
+        if (!optionsFound) {
+            midiOutSelect.innerHTML = '<option value="">No MIDI output ports found.</option>';
+            generateConfig('No Port Selected');
+            copyConfigBtn.disabled = true;
+        } else {
+             // Add a default instruction option if nothing is selected
+             const instructionOption = document.createElement('option');
+             instructionOption.value = "";
+             instructionOption.textContent = "--- Select a Port ---";
+             midiOutSelect.prepend(instructionOption);
+             midiOutSelect.selectedIndex = 0;
+             generateConfig('No Port Selected');
+             copyConfigBtn.disabled = true;
+        }
+        
+        return availablePorts;
+    }
+
+    /**
+     * Sets the selected MIDI output port.
+     * @param {boolean} [silent=false] If true, skips status message updates.
+     */
+    function selectMidiPort(silent = false) {
+        const portId = midiOutSelect.value;
+        
+        if (portId && midiAccess) {
+            midiOutputPort = midiAccess.outputs.get(portId);
+            if (!silent) {
+                statusText.textContent = `Status: Connected to port: ${midiOutputPort.name}`;
+                statusText.parentElement.classList.remove('bg-yellow-900/50', 'bg-red-900/50');
+                statusText.parentElement.classList.add('bg-green-900/50', 'border-green-700');
+            }
+            clearAllPads(true); // Clear lights on connection
+            
+            // Generate and enable copying of configuration
+            generateConfig(midiOutputPort.name);
+            copyConfigBtn.disabled = false;
+
+            // Check if we need to save 'manual' or 'none' state
+            if (!patternActive || getActivePatternName() === 'manual') {
+                saveState(getActivePatternName()); 
+            }
+            
+        } else {
+            midiOutputPort = null;
+            if (!silent) {
+                statusText.textContent = "Status: MIDI port not selected.";
+            }
+            // Clear config if nothing is selected
+            generateConfig('No Port Selected');
+            copyConfigBtn.disabled = true;
+            saveState('none'); // Clear port ID in state
+        }
+    }
+    
+    // --- UI/Config Generation Functions ---
+
+    /**
+     * Generates the config.json content based on the selected port name.
+     * @param {string} portName The name of the MIDI port to be used by the Python script.
+     */
+    function generateConfig(portName) {
+        if (portName === 'No Port Selected') {
+            configOutputDiv.textContent = '{ "MIDI_PORT_NAME": "[Select port above to generate config]" }';
+        } else {
+            const configObj = {
+                "MIDI_PORT_NAME": portName
+            };
+            configOutputDiv.textContent = JSON.stringify(configObj, null, 4);
+        }
+    }
+
+    /**
+     * Copies the generated config content to the clipboard.
+     */
+    function copyConfigToClipboard() {
+        const configContent = configOutputDiv.textContent;
+        // Use document.execCommand('copy') as navigator.clipboard.writeText() may not work due to iFrame restrictions.
+        const tempTextarea = document.createElement('textarea');
+        tempTextarea.value = configContent;
+        document.body.appendChild(tempTextarea);
+        tempTextarea.select();
+        try {
+            document.execCommand('copy');
+            copyConfigBtn.textContent = 'Copied to Clipboard! (Save as config.json)';
+            setTimeout(() => {
+                copyConfigBtn.textContent = 'Copy Config Content';
+            }, 3000);
+        } catch (err) {
+            alert('Failed to copy config. Please copy the text manually.');
+        }
+        document.body.removeChild(tempTextarea);
+    }
+    
+    // --- (Rest of Manual Control and Pattern Functions remain the same) ---
+    // ... (All functions below are unchanged from the previous version)
+
+    /**
+     * Initializes the pad grid and color selector UI.
+     */
+    function initializeUI() {
+        // 1. Initialize Pad Grid
+        for (let i = 0; i < 16; i++) {
+            const padElement = document.createElement('div');
+            padElement.id = `pad-${i}`;
+            padElement.className = 'pad';
+            padElement.title = `Pad ${i + 1} (Note: ${PAD_NOTES[i]})`;
+            padElement.dataset.padIndex = i;
+            // The Launchkey pad numbering starts from the bottom left:
+            // Row 4: 13-16, Row 3: 9-12, Row 2: 5-8, Row 1: 1-4 (Visual mapping for easier use)
+            const row = Math.floor(i / 4) + 1;
+            const col = (i % 4) + 1;
+            padElement.textContent = `${row}-${col}`; 
+            
+            padElement.addEventListener('click', () => {
+                // Manually set the color of the pad on the controller and in the UI
+                setPadColor(i, selectedColor.velocity, selectedColor.hex, selectedColor.glow);
+                stopPattern(true); // Stop pattern silently
+                patternActive = false;
+                saveState('manual'); // Save state as manual
+            });
+            padGridDiv.appendChild(padElement);
+        }
+
+        // 2. Initialize Color Selector
+        COLORS_MAP.forEach((color, index) => {
+            const colorOption = document.createElement('div');
+            colorOption.className = `color-option ${color.css} ${index === 1 ? 'selected' : ''}`; // Default Red selected
+            colorOption.title = color.name;
+            colorOption.dataset.velocity = color.velocity;
+            colorOption.dataset.hex = color.hex;
+            colorOption.dataset.glow = color.glow;
+            
+            colorOption.addEventListener('click', () => {
+                // Set this color as the selected color
+                setSelectedColor(color);
+            });
+            colorSelectorDiv.appendChild(colorOption);
+        });
+    }
+
+    /**
+     * Sets the currently selected color and updates the UI ring.
+     * @param {object} colorObj The color object from COLORS_MAP.
+     */
+    function setSelectedColor(colorObj) {
+        // Remove selection from all previous options
+        document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+        
+        // Add selection to the new option
+        const newSelectedEl = document.querySelector(`.color-option[data-velocity="${colorObj.velocity}"]`);
+        if (newSelectedEl) newSelectedEl.classList.add('selected');
+
+        selectedColor = colorObj;
+    }
+
+    /**
+     * Sets the color of a specific pad, both in the UI and on the Launchkey.
+     * @param {number} padIndex Index of the pad (0-15).
+     * @param {number} velocity MIDI color velocity.
+     * @param {string} hexColor CSS hex color for UI update.
+     * @param {string} glowStyle CSS box-shadow glow style.
+     */
+    function setPadColor(padIndex, velocity, hexColor, glowStyle) {
+        // Send MIDI to the controller
+        const midiNote = PAD_NOTES[padIndex];
+        sendMidiMessage(midiNote, velocity);
+        
+        // Update the UI visualization
+        const padElement = document.getElementById(`pad-${padIndex}`);
+        if (padElement) {
+            // Apply dynamic lighting styles
+            padElement.style.backgroundColor = hexColor;
+            
+            if (velocity > 0) {
+                // Apply glow for lit pads
+                padElement.style.boxShadow = glowStyle; 
+                padElement.classList.add('lit-pad');
+                padElement.style.color = 'white'; // Make text visible when lit
+            } else {
+                // Revert to off state styles
+                padElement.style.boxShadow = 'inset 0 5px 10px rgba(0, 0, 0, 0.5), 0 2px 5px rgba(0, 0, 0, 0.5)';
+                padElement.classList.remove('lit-pad');
+                padElement.style.color = 'rgba(255, 255, 255, 0.3)';
+            }
+        }
+    }
+
+    /**
+     * Turns off all pad LEDs on the controller and resets the UI.
+     * @param {boolean} [silent=false] If true, doesn't stop the interval.
+     */
+    function clearAllPads(silent = false) {
+        if (!silent) stopPattern(true); // Use silent stop
+        
+        // Send MIDI OFF (Velocity 0) to all pads
+        PAD_NOTES.forEach(note => sendMidiMessage(note, 0));
+        
+        // Reset UI colors
+        document.querySelectorAll('.pad').forEach(el => {
+            el.style.backgroundColor = COLORS_MAP[0].hex;
+            el.style.boxShadow = 'inset 0 5px 10px rgba(0, 0, 0, 0.5), 0 2px 5px rgba(0, 0, 0, 0.5)';
+            el.classList.remove('lit-pad');
+            el.style.color = 'rgba(255, 255, 255, 0.3)';
+        });
+    }
+    
+    /**
+     * Finds the name of the currently active pattern button based on its onclick handler.
+     */
+    function getActivePatternName() {
+        const buttons = document.querySelectorAll('.grid > button');
+        for (const button of buttons) {
+            if (button.classList.contains('active-pattern')) {
+                // Extracts the pattern name from the onclick attribute (e.g., 'rainbow' from "startPattern('rainbow')")
+                const match = button.getAttribute('onclick').match(/startPattern\('(.*)'\)/);
+                if (match) return match[1];
+            }
+        }
+        return 'none';
+    }
+
+
+    // --- PATTERN FUNCTIONS ---
+
+    let rainbowIndex = 0;
+    let wavePosition = 0;
+    let waveDirection = 1; // 1 for right, -1 for left
+
+    /**
+     * Starts a dynamic light pattern.
+     * @param {string} patternName 'rainbow', 'wave', or 'rain'
+     * @param {boolean} [silent=false] If true, skips saving state (used for auto-resume).
+     */
+    function startPattern(patternName, silent = false) {
+        if (!midiOutputPort) {
+            statusText.textContent = "Error: Please select the MIDI port first!";
+            return;
+        }
+        
+        stopPattern(true); // Stop any currently running pattern silently
+        
+        patternActive = true;
+        
+        // Reset pattern indices
+        rainbowIndex = 0;
+        wavePosition = 0;
+        waveDirection = 1;
+        
+        const speed = 70; // milliseconds
+
+        // UI Feedback (Highlight the active button)
+        document.querySelectorAll('.grid > button').forEach(btn => btn.classList.remove('active-pattern', 'ring-4', 'ring-offset-2', 'ring-offset-gray-800', 'ring-yellow-500'));
+        const activeBtn = document.querySelector(`button[onclick="startPattern('${patternName}')"]`);
+        if(activeBtn) activeBtn.classList.add('active-pattern');
+
+
+        if (patternName === 'rainbow') {
+            const colors = COLORS_MAP.filter(c => c.velocity > 0);
+            
+            patternInterval = setInterval(() => {
+                
+                // Clear the last pad
+                const offColor = COLORS_MAP.find(c => c.velocity === 0);
+                const lastIndex = (rainbowIndex - 1 + PAD_NOTES.length) % PAD_NOTES.length;
+                setPadColor(lastIndex, offColor.velocity, offColor.hex, offColor.glow); 
+                
+                // Light up the current pad with a cycling color
+                const color = colors[rainbowIndex % colors.length];
+                setPadColor(rainbowIndex, color.velocity, color.hex, color.glow);
+
+                rainbowIndex = (rainbowIndex + 1) % PAD_NOTES.length;
+            }, speed);
+
+        } else if (patternName === 'wave') {
+            const waveColor = COLORS_MAP.find(c => c.velocity === 127); // White wave
+            const offColor = COLORS_MAP.find(c => c.velocity === 0);
+            
+            patternInterval = setInterval(() => {
+                
+                // Clear all previous lights
+                clearAllPads(true); 
+
+                // Light up the wave position
+                setPadColor(wavePosition, waveColor.velocity, waveColor.hex, waveColor.glow);
+
+                // Move the wave
+                wavePosition += waveDirection;
+                
+                // Reverse direction if hitting the end or start
+                if (wavePosition >= PAD_NOTES.length - 1) {
+                    waveDirection = -1;
+                } else if (wavePosition <= 0) {
+                    waveDirection = 1;
+                }
+
+            }, speed);
+        } else if (patternName === 'rain') {
+            const colors = COLORS_MAP.filter(c => c.velocity > 0);
+            const offColor = COLORS_MAP.find(c => c.velocity === 0);
+            
+            patternInterval = setInterval(() => {
+                
+                // 1. Pick a random pad index
+                const randomIndex = Math.floor(Math.random() * PAD_NOTES.length);
+                
+                // 2. Pick a random color
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                // 3. Set the color
+                setPadColor(randomIndex, randomColor.velocity, randomColor.hex, randomColor.glow);
+                
+                // 4. After a very short delay, turn it off (to create a 'sparkle' or 'rain' effect)
+                // Use a timeout to turn it off asynchronously
+                setTimeout(() => {
+                    setPadColor(randomIndex, offColor.velocity, offColor.hex, offColor.glow);
+                }, 150); // Pad stays lit for 150ms
+
+            }, 50); // A new 'rain drop' happens every 50ms (fast)
+        }
+        
+        if (!silent) {
+            saveState(patternName); // Save the pattern name
+            console.log(`Pattern '${patternName}' started and state saved.`);
+        }
+    }
+
+    /**
+     * Stops the currently running pattern and clears the lights.
+     * @param {boolean} [silent=false] If true, skips state saving and UI reset.
+     */
+    function stopPattern(silent = false) {
+        if (patternInterval) {
+            clearInterval(patternInterval);
+            patternInterval = null;
+        }
+        
+        // This is only called true if an interval was actually running
+        if (patternActive) {
+            clearAllPads(true);
+            patternActive = false;
+        }
+        
+        if (!silent) {
+            // Remove UI feedback
+            document.querySelectorAll('.grid > button').forEach(btn => btn.classList.remove('active-pattern'));
+            saveState('none'); // Save 'none' as active pattern
+            console.log("Patterns stopped and state saved.");
+        }
+    }
+
+    // --- Initialization on Load ---
+    window.onload = () => {
+        initializeUI();
+        requestMidiAccess();
+    };
+
+</script>
+
+</body>
+</html>
